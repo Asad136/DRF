@@ -11,6 +11,8 @@ from .models import Product
 from .serializers import ProductSerializer
 import csv
 from django.http import HttpResponse
+from rest_framework_simplejwt.exceptions import InvalidToken
+
 @api_view(['POST'])
 def signup(request):
     person = UserSerializer(data=request.data)
@@ -38,7 +40,12 @@ def loginuser(request):
 def productlist(request):
     products = Product.objects.all()
     serializer = ProductSerializer(products, many=True)
-    return Response(serializer.data)
+    is_superuser = request.user.is_superuser
+    response_data = {
+            'is_superuser': is_superuser,
+            'products': serializer.data
+        }
+    return Response(response_data)
 
 
 @api_view(['POST'])
@@ -66,6 +73,7 @@ def productdetail(request, pk):
     return Response(serializer.data)
 
 
+
 @api_view(['PUT'])
 @permission_classes([IsAuthenticated])
 def productupdate(request, pk):
@@ -82,7 +90,6 @@ def productupdate(request, pk):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     else:
         return Response({'error': 'Only superusers can edit products'}, status=status.HTTP_403_FORBIDDEN)
-
 
 @api_view(['DELETE'])
 @permission_classes([IsAuthenticated])
@@ -119,3 +126,18 @@ def downloadcsv(request):
         writer.writerow([product.id, product.name, product.description, product.price, product.created_at, product.updated_at])
 
     return response
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def logout(request):
+    try:
+        refresh_token = request.data.get('refresh')
+        if refresh_token:
+            token = RefreshToken(refresh_token)
+            token.blacklist()
+            return Response({'message': 'Logout successful'}, status=status.HTTP_205_RESET_CONTENT)
+        else:
+            return Response({'error': 'Refresh token is required'}, status=status.HTTP_400_BAD_REQUEST)
+    except InvalidToken:
+        return Response({'error': 'Invalid token'}, status=status.HTTP_400_BAD_REQUEST)
